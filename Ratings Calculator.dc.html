@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/broadsheet-5f34dc76-58bd-4400-8df8-c9a33d3e4014/styles.css">
+  <script src="_ds/broadsheet-5f34dc76-58bd-4400-8df8-c9a33d3e4014/_ds_bundle.js"></script>
+  <script src="data/ratings-data.js"></script>
+  <script src="data/interpolate.js"></script>
+  <style>
+    body { margin: 0; }
+    @media print {
+      .no-print { display: none !important; }
+    }
+  </style>
+</helmet>
+
+<div style="min-height:100vh;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);">
+  <div style="max-width:640px;margin:0 auto;padding:var(--space-8) var(--space-4) var(--space-8);">
+    <header style="margin-bottom:var(--space-6);">
+      <h1 style="margin:0 0 var(--space-1);">VillaTherm &amp; Emeric Expanded Ratings Calculator</h1>
+      <p class="text-muted" style="margin:0;font-size:14px;">Interpolated capacity from manufacturer expanded rating data — VillaTherm &amp; Emeric equipment.</p>
+    </header>
+
+    <sc-if value="{{ notReady }}" hint-placeholder-val="{{ false }}">
+      <p class="text-muted">Loading rating data…</p>
+    </sc-if>
+
+    <sc-if value="{{ hasLoadError }}" hint-placeholder-val="{{ false }}">
+      <div class="card" style="border:1px solid var(--color-accent-2-400);background:var(--color-accent-2-100);gap:8px;">
+        <div class="card-title" style="font-size:15px;color:var(--color-accent-2-800);">Couldn't load rating data</div>
+        <div style="font-size:13px;color:var(--color-accent-2-800);">{{ loadError }}</div>
+        <button class="btn btn-secondary" style="align-self:flex-start;" onClick="{{ onRetryLoad }}">Try again</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSelectView }}" hint-placeholder-val="{{ true }}">
+      <section>
+        <div class="field" style="margin-bottom:var(--space-4);">
+          <label for="combo-select">Equipment combination</label>
+          <select id="combo-select" class="input" value="{{ comboId }}" onChange="{{ onSelectCombo }}">
+            <sc-for list="{{ groups }}" as="group" hint-placeholder-count="3">
+              <optgroup label="{{ group.label }}">
+                <sc-for list="{{ group.items }}" as="item" hint-placeholder-count="4">
+                  <option value="{{ item.id }}">{{ item.optionLabel }}</option>
+                </sc-for>
+              </optgroup>
+            </sc-for>
+          </select>
+        </div>
+
+        <div class="card elev-sm" style="margin-bottom:var(--space-6);">
+          <div class="card-kicker">{{ kickerLabel }}</div>
+          <div class="card-title">{{ tonnageLabel }}</div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:6px;opacity:1;">
+            <div><strong>Outdoor unit</strong> — {{ outdoorModel }}</div>
+            <div><strong>Indoor unit</strong> — {{ indoorModel }}</div>
+          </div>
+          <div class="card-meta">
+            <sc-if value="{{ hasCooling }}" hint-placeholder-val="{{ true }}"><span class="tag tag-accent">Cooling data</span></sc-if>
+            <sc-if value="{{ hasHeating }}" hint-placeholder-val="{{ true }}"><span class="tag tag-accent-2">Heating data</span></sc-if>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onClick="{{ onGoToCalc }}">Run Performance Calculation →</button>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ isCalcView }}" hint-placeholder-val="{{ false }}">
+      <section>
+        <button class="btn btn-ghost no-print" style="margin-bottom:var(--space-4);padding-left:0;" onClick="{{ onGoBack }}">← Back to equipment selection</button>
+
+        <div class="card" style="margin-bottom:var(--space-5);">
+          <div class="card-kicker">{{ kickerLabel }} — {{ tonnageLabel }}</div>
+          <div style="font-size:14px;">{{ outdoorModel }} + {{ indoorModel }}</div>
+        </div>
+
+        <div class="no-print">
+          <div class="field" style="margin-bottom:var(--space-3);">
+            <label>Airflow — CFM <span class="text-muted">(valid {{ cfmRange }})</span></label>
+            <input class="input" type="number" value="{{ cfm }}" onChange="{{ onCfm }}" placeholder="e.g. 800">
+          </div>
+
+          <sc-if value="{{ hasCooling }}" hint-placeholder-val="{{ true }}">
+            <h4 style="margin:var(--space-4) 0 var(--space-2);">Cooling conditions</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-3);">
+              <div class="field">
+                <label>Outdoor DB °F <span class="text-muted">({{ odbRangeC }})</span></label>
+                <input class="input" type="number" value="{{ odbC }}" onChange="{{ onOdbC }}">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-3);">
+              <div class="field">
+                <label>Indoor DB °F <span class="text-muted">({{ idbRangeC }})</span></label>
+                <input class="input" type="number" value="{{ idbC }}" onChange="{{ onIdbC }}">
+              </div>
+              <div class="field">
+                <label>Indoor WB °F <span class="text-muted">({{ iwbRangeC }})</span></label>
+                <input class="input" type="number" value="{{ iwbC }}" onChange="{{ onIwbC }}">
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ hasHeating }}" hint-placeholder-val="{{ true }}">
+            <h4 style="margin:var(--space-4) 0 var(--space-2);">Heating conditions</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-3);">
+              <div class="field">
+                <label>Outdoor DB °F <span class="text-muted">({{ odbRangeH }})</span></label>
+                <input class="input" type="number" value="{{ odbH }}" onChange="{{ onOdbH }}">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-4);">
+              <div class="field">
+                <label>Indoor DB °F <span class="text-muted">({{ idRangeH }})</span></label>
+                <input class="input" type="number" value="{{ idH }}" onChange="{{ onIdH }}">
+              </div>
+            </div>
+          </sc-if>
+
+          <button class="btn btn-primary btn-block" onClick="{{ onCalculate }}" style="margin-bottom:var(--space-5);">Calculate Capacity</button>
+        </div>
+
+        <sc-if value="{{ hasErrors }}" hint-placeholder-val="{{ false }}">
+          <div class="card" style="border:1px solid var(--color-accent-2-400);background:var(--color-accent-2-100);margin-bottom:var(--space-5);gap:6px;">
+            <div class="card-title" style="font-size:15px;color:var(--color-accent-2-800);">Can't calculate</div>
+            <sc-for list="{{ errors }}" as="err" hint-placeholder-count="1">
+              <div style="font-size:13px;color:var(--color-accent-2-800);">{{ err }}</div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+            <div class="card">
+              <div class="card-kicker">Conditions used</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;">
+                <span>Airflow: <strong>{{ usedCfm }} CFM</strong></span>
+                <sc-if value="{{ resultsCoolingPresent }}" hint-placeholder-val="{{ false }}">
+                  <span>Outdoor DB (cooling): <strong>{{ usedOdbC }}°F</strong></span>
+                  <span>Indoor DB (cooling): <strong>{{ usedIdbC }}°F</strong></span>
+                  <span>Indoor WB (cooling): <strong>{{ usedIwbC }}°F</strong></span>
+                </sc-if>
+                <sc-if value="{{ resultsHeatingPresent }}" hint-placeholder-val="{{ false }}">
+                  <span>Indoor DB (heating): <strong>{{ usedIdH }}°F</strong></span>
+                  <span>Outdoor DB (heating): <strong>{{ usedOdbH }}°F</strong></span>
+                </sc-if>
+              </div>
+            </div>
+            <sc-if value="{{ resultsCoolingPresent }}" hint-placeholder-val="{{ false }}">
+              <div class="card elev-sm">
+                <div class="card-kicker">Cooling performance</div>
+                <div style="display:flex;justify-content:space-between;"><span>Total Capacity</span><strong>{{ totalCoolingFmt }}</strong></div>
+                <div style="display:flex;justify-content:space-between;"><span>Sensible Capacity</span><strong>{{ sensibleFmt }}</strong></div>
+                <div style="display:flex;justify-content:space-between;"><span>Latent Capacity</span><strong>{{ latentFmt }}</strong></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ resultsHeatingPresent }}" hint-placeholder-val="{{ false }}">
+              <div class="card elev-sm">
+                <div class="card-kicker">Heating performance</div>
+                <div style="display:flex;justify-content:space-between;"><span>Total Capacity</span><strong>{{ totalHeatingFmt }}</strong></div>
+              </div>
+            </sc-if>
+            <button class="btn btn-secondary no-print" onClick="{{ onPrint }}">Print results</button>
+            <sc-if value="{{ showPrintTip }}" hint-placeholder-val="{{ false }}">
+              <p class="text-muted no-print" style="font-size:13px;margin:-8px 0 0;">If no print dialog opened, use your browser's own Print command (menu or Ctrl/Cmd+P) — this page is already formatted for a clean printout.</p>
+            </sc-if>
+          </div>
+        </sc-if>
+      </section>
+    </sc-if>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;strictRangeValidation&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Behavior&quot; },
+  &quot;resultUnits&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;Btuh&quot;, &quot;options&quot;: [&quot;Btuh&quot;, &quot;kBtuh&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Behavior&quot; },
+  &quot;defaultComboId&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;SD-24&quot;, &quot;options&quot;: [&quot;SD-24&quot;, &quot;SD-36&quot;, &quot;SD-48&quot;, &quot;SD-60&quot;, &quot;TD-24&quot;, &quot;TD-36&quot;, &quot;TD-48&quot;, &quot;TD-60&quot;, &quot;EM-24&quot;, &quot;EM-36&quot;, &quot;EM-48&quot;, &quot;EM-60&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Behavior&quot; }
+}">
+class Component extends DCLogic {
+  state = {
+    ready: false,
+    comboId: null,
+    view: 'select',
+    cfm: '', odbC: '', idbC: '', iwbC: '', idH: '', odbH: '',
+    results: null,
+    errors: null,
+    loadError: null,
+    showPrintTip: false,
+  };
+
+  componentDidMount() {
+    this.loadData();
+  }
+
+  loadData(attempt) {
+    if (window.RATINGS && window.RatingsInterp) {
+      this.RATINGS = window.RATINGS;
+      this.interp = window.RatingsInterp;
+      const defaultId = this.props.defaultComboId && this.RATINGS.find(c => c.id === this.props.defaultComboId)
+        ? this.props.defaultComboId : this.RATINGS[0].id;
+      this.setState({ ready: true, loadError: null, comboId: defaultId });
+    } else if (!attempt || attempt < 10) {
+      setTimeout(() => this.loadData((attempt || 0) + 1), 200);
+    } else {
+      this.setState({ loadError: 'Rating data scripts did not load.' });
+    }
+  }
+
+  retryLoad = () => { this.setState({ loadError: null }); this.loadData(); };
+
+  getCombo() { return this.RATINGS ? this.RATINGS.find(c => c.id === this.state.comboId) : null; }
+
+  selectCombo = (e) => { this.setState({ comboId: e.target.value, results: null, errors: null }); };
+  goToCalc = () => { this.setState({ view: 'calc', results: null, errors: null }); };
+  goBack = () => { this.setState({ view: 'select', results: null, errors: null }); };
+  setField = (field) => (e) => { this.setState({ [field]: e.target.value }); };
+
+  calculate = () => {
+    const combo = this.getCombo();
+    if (!combo) return;
+    const clamp = this.props.strictRangeValidation === false;
+    const errors = [];
+    const filled = (v) => v !== '' && v !== undefined && v !== null;
+    const num = (v, label) => {
+      const n = parseFloat(v);
+      if (!filled(v) || isNaN(n)) { errors.push(label + ' is required.'); return null; }
+      return n;
+    };
+
+    const coolingRequested = !!combo.cooling && (filled(this.state.odbC) || filled(this.state.idbC) || filled(this.state.iwbC));
+    const heatingRequested = !!combo.heating && (filled(this.state.odbH) || filled(this.state.idH));
+
+    if (!coolingRequested && !heatingRequested) {
+      this.setState({ errors: ['Enter cooling and/or heating conditions to calculate.'], results: null });
+      return;
+    }
+
+    const cfm = num(this.state.cfm, 'Airflow (CFM)');
+    let coolingResult = null, heatingResult = null;
+
+    if (coolingRequested) {
+      if (!filled(this.state.odbC) || !filled(this.state.idbC) || !filled(this.state.iwbC)) {
+        errors.push('Complete all three cooling fields (Outdoor DB, Indoor DB, Indoor WB), or leave them all blank to skip cooling.');
+      } else if (cfm !== null) {
+        const odbC = num(this.state.odbC, 'Outdoor DB (cooling)');
+        const idbC = num(this.state.idbC, 'Indoor DB (cooling)');
+        const iwbC = num(this.state.iwbC, 'Indoor WB (cooling)');
+        try { coolingResult = this.interp.interpolateCooling(combo.cooling, { cfm, odb: odbC, iwb: iwbC, idb: idbC }, clamp); }
+        catch (e) { errors.push(e.message || String(e)); }
+      }
+    }
+    if (heatingRequested) {
+      if (!filled(this.state.odbH) || !filled(this.state.idH)) {
+        errors.push('Complete both heating fields (Outdoor DB, Indoor DB), or leave them both blank to skip heating.');
+      } else if (cfm !== null) {
+        const idH = num(this.state.idH, 'Indoor DB (heating)');
+        const odbH = num(this.state.odbH, 'Outdoor DB (heating)');
+        try { heatingResult = this.interp.interpolateHeating(combo.heating, { cfm, id: idH, odb: odbH }, clamp); }
+        catch (e) { errors.push(e.message || String(e)); }
+      }
+    }
+
+    if (errors.length) this.setState({ errors, results: null });
+    else this.setState({ errors: null, results: { cooling: coolingResult, heating: heatingResult, inputs: {
+      cfm, odbC: coolingResult ? this.state.odbC : null, idbC: coolingResult ? this.state.idbC : null,
+      iwbC: coolingResult ? this.state.iwbC : null, idH: heatingResult ? this.state.idH : null, odbH: heatingResult ? this.state.odbH : null,
+    } } });
+  };
+
+  buildPrintHtml() {
+    const results = this.state.results;
+    const combo = this.getCombo();
+    if (!results || !combo) return '';
+    const parts = combo.modelName.split(' + ');
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    let rows = '';
+    if (results.cooling) {
+      rows += `<h2>Cooling performance</h2>
+        <table><tr><td>Total Capacity</td><td>${esc(this.fmtCap(results.cooling.totalBtuh))}</td></tr>
+        <tr><td>Sensible Capacity</td><td>${esc(this.fmtCap(results.cooling.sensibleBtuh))}</td></tr>
+        <tr><td>Latent Capacity</td><td>${esc(this.fmtCap(results.cooling.latentBtuh))}</td></tr></table>`;
+    }
+    if (results.heating) {
+      rows += `<h2>Heating performance</h2>
+        <table><tr><td>Total Capacity</td><td>${esc(this.fmtCap(results.heating.totalBtuh))}</td></tr></table>`;
+    }
+    let conditions = `<div>Airflow: <strong>${esc(results.inputs.cfm)} CFM</strong></div>`;
+    if (results.cooling) conditions += `<div>Outdoor DB (cooling): <strong>${esc(results.inputs.odbC)}°F</strong> · Indoor DB (cooling): <strong>${esc(results.inputs.idbC)}°F</strong> · Indoor WB (cooling): <strong>${esc(results.inputs.iwbC)}°F</strong></div>`;
+    if (results.heating) conditions += `<div>Outdoor DB (heating): <strong>${esc(results.inputs.odbH)}°F</strong> · Indoor DB (heating): <strong>${esc(results.inputs.idH)}°F</strong></div>`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expanded Rating Results</title>
+      <style>
+        body{font-family:Georgia,'Source Serif 4',serif;color:#201e1d;max-width:640px;margin:32px auto;padding:0 16px;}
+        h1{font-size:22px;margin:0 0 4px;} h2{font-size:16px;margin:24px 0 8px;}
+        p.sub{color:#666;margin:0 0 24px;font-size:13px;}
+        table{width:100%;border-collapse:collapse;margin-bottom:8px;}
+        td{padding:6px 0;border-bottom:1px solid #ddd;font-size:14px;}
+        td:last-child{text-align:right;font-weight:600;}
+        .conditions{font-size:13px;color:#444;display:flex;flex-direction:column;gap:4px;margin-bottom:16px;}
+      </style></head><body>
+      <h1>${esc(combo.brand)} ${esc(combo.tonnage / 12)} Ton — ${esc(parts[0] || '')} + ${esc(parts[1] || '')}</h1>
+      <p class="sub">Interpolated from manufacturer expanded rating data.</p>
+      <div class="conditions">${conditions}</div>
+      ${rows}
+      </body></html>`;
+  }
+
+  printResults = () => {
+    // Published pages are served inside a sandboxed iframe with no allow-modals/allow-popups,
+    // which silently blocks window.print()/window.open() from script — a platform restriction
+    // we can't lift from inside the page. window.print() still works fine in the editor preview
+    // and in a standalone/offline copy of this file, so attempt it, but don't depend on it:
+    // this page's own layout already hides the .no-print controls under @media print, so the
+    // browser's own Ctrl/Cmd+P (or Share > Print) always produces a clean printout regardless.
+    try { window.print(); } catch (e) {}
+    this.setState({ showPrintTip: true });
+  };
+
+  fmtCap(n) {
+    const units = this.props.resultUnits || 'Btuh';
+    if (units === 'kBtuh') return (n / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' kBtuh';
+    return Math.round(n).toLocaleString() + ' Btuh';
+  }
+
+  renderVals() {
+    const combo = this.getCombo();
+    const combos = this.RATINGS || [];
+    const label = (c) => `${c.tonnage}K — ${c.modelName}`;
+    const groups = [
+      { label: 'VillaTherm — Side Discharge', items: combos.filter(c => c.id.startsWith('SD-')).map(c => ({ id: c.id, optionLabel: label(c) })) },
+      { label: 'VillaTherm — Top Discharge', items: combos.filter(c => c.id.startsWith('TD-')).map(c => ({ id: c.id, optionLabel: label(c) })) },
+      { label: 'Emeric', items: combos.filter(c => c.id.startsWith('EM-')).map(c => ({ id: c.id, optionLabel: label(c) })) },
+    ].filter(g => g.items.length);
+
+    let coolingR = null, heatingR = null;
+    if (combo && this.interp) {
+      if (combo.cooling) coolingR = this.interp.coolingRanges(combo.cooling);
+      if (combo.heating) heatingR = this.interp.heatingRanges(combo.heating);
+    }
+    const fmtR = (r) => r ? `${r[0]}–${r[1]}` : '';
+    const cfmR = coolingR ? coolingR.cfm : (heatingR ? heatingR.cfm : null);
+
+    const parts = combo ? combo.modelName.split(' + ') : ['', ''];
+    const dischargeLabel = combo ? ({ side: 'Side Discharge', top: 'Top Discharge', na: '' }[combo.discharge] || '') : '';
+    const kickerLabel = combo ? (combo.brand + (dischargeLabel ? ' — ' + dischargeLabel : '')) : '';
+
+    const results = this.state.results;
+    return {
+      notReady: !this.state.ready && !this.state.loadError,
+      hasLoadError: !!this.state.loadError,
+      loadError: this.state.loadError,
+      onRetryLoad: this.retryLoad,
+      isSelectView: this.state.ready && this.state.view === 'select',
+      isCalcView: this.state.ready && this.state.view === 'calc',
+      groups,
+      comboId: this.state.comboId,
+      onSelectCombo: this.selectCombo,
+      kickerLabel,
+      tonnageLabel: combo ? (combo.tonnage / 12) + ' Ton' : '',
+      outdoorModel: parts[0] || '',
+      indoorModel: parts[1] || '',
+      hasCooling: !!(combo && combo.cooling),
+      hasHeating: !!(combo && combo.heating),
+      onGoToCalc: this.goToCalc,
+      onGoBack: this.goBack,
+      cfm: this.state.cfm, onCfm: this.setField('cfm'),
+      odbC: this.state.odbC, onOdbC: this.setField('odbC'),
+      idbC: this.state.idbC, onIdbC: this.setField('idbC'),
+      iwbC: this.state.iwbC, onIwbC: this.setField('iwbC'),
+      idH: this.state.idH, onIdH: this.setField('idH'),
+      odbH: this.state.odbH, onOdbH: this.setField('odbH'),
+      onCalculate: this.calculate,
+      onPrint: this.printResults,
+      errors: this.state.errors || [],
+      hasErrors: !!(this.state.errors && this.state.errors.length),
+      hasResults: !!results,
+      showPrintTip: this.state.showPrintTip,
+      resultsCoolingPresent: !!(results && results.cooling),
+      resultsHeatingPresent: !!(results && results.heating),
+      usedCfm: results ? results.inputs.cfm : '',
+      usedOdbC: results && results.inputs.odbC !== null ? results.inputs.odbC : '',
+      usedIdbC: results && results.inputs.idbC !== null ? results.inputs.idbC : '',
+      usedIwbC: results && results.inputs.iwbC !== null ? results.inputs.iwbC : '',
+      usedIdH: results && results.inputs.idH !== null ? results.inputs.idH : '',
+      usedOdbH: results && results.inputs.odbH !== null ? results.inputs.odbH : '',
+      cfmRange: fmtR(cfmR),
+      odbRangeC: coolingR ? fmtR(coolingR.odb) : '',
+      idbRangeC: coolingR ? fmtR(coolingR.idb) : '',
+      iwbRangeC: coolingR ? fmtR(coolingR.iwb) : '',
+      idRangeH: heatingR ? fmtR(heatingR.id) : '',
+      odbRangeH: heatingR ? fmtR(heatingR.odb) : '',
+      totalCoolingFmt: results && results.cooling ? this.fmtCap(results.cooling.totalBtuh) : '',
+      sensibleFmt: results && results.cooling ? this.fmtCap(results.cooling.sensibleBtuh) : '',
+      latentFmt: results && results.cooling ? this.fmtCap(results.cooling.latentBtuh) : '',
+      totalHeatingFmt: results && results.heating ? this.fmtCap(results.heating.totalBtuh) : '',
+    };
+  }
+}
+
+</script>
+</body>
+</html>
