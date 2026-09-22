@@ -180,7 +180,7 @@
 <script type="text/x-dc" data-dc-script data-props="{
   &quot;strictRangeValidation&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Behavior&quot; },
   &quot;resultUnits&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;Btuh&quot;, &quot;options&quot;: [&quot;Btuh&quot;, &quot;kBtuh&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Behavior&quot; },
-  &quot;defaultComboId&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;SD-24&quot;, &quot;options&quot;: [&quot;SD-24&quot;, &quot;SD-36&quot;, &quot;SD-48&quot;, &quot;SD-60&quot;, &quot;TD-24&quot;, &quot;TD-36&quot;, &quot;TD-48&quot;, &quot;TD-60&quot;, &quot;S2-24&quot;, &quot;S2-36&quot;, &quot;S2-48&quot;, &quot;S2-60&quot;, &quot;T2-24&quot;, &quot;T2-36&quot;, &quot;T2-48&quot;, &quot;T2-60&quot;, &quot;EM-24&quot;, &quot;EM-36&quot;, &quot;EM-48&quot;, &quot;EM-60&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Behavior&quot; }
+  &quot;defaultComboId&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;SD-24&quot;, &quot;options&quot;: [&quot;SD-24&quot;, &quot;SD-36&quot;, &quot;SD-48&quot;, &quot;SD-60&quot;, &quot;TD-24&quot;, &quot;TD-36&quot;, &quot;TD-48&quot;, &quot;TD-60&quot;, &quot;S2-24&quot;, &quot;S2-36&quot;, &quot;S2-48&quot;, &quot;S2-60&quot;, &quot;EM-24&quot;, &quot;EM-36&quot;, &quot;EM-48&quot;, &quot;EM-60&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Behavior&quot; }
 }">
 class Component extends DCLogic {
   state = {
@@ -337,7 +337,6 @@ class Component extends DCLogic {
       { label: 'VillaTherm — Side Discharge', items: combos.filter(c => c.id.startsWith('SD-')).map(c => ({ id: c.id, optionLabel: label(c) })) },
       { label: 'VillaTherm — Top Discharge', items: combos.filter(c => c.id.startsWith('TD-')).map(c => ({ id: c.id, optionLabel: label(c) })) },
       { label: 'VillaTherm — Side Discharge, Two-Piece AHU (R32)', items: combos.filter(c => c.id.startsWith('S2-')).map(c => ({ id: c.id, optionLabel: label(c) })) },
-      { label: 'VillaTherm — Top Discharge, Two-Piece AHU (R454B)', items: combos.filter(c => c.id.startsWith('T2-')).map(c => ({ id: c.id, optionLabel: label(c) })) },
       { label: 'Emeric', items: combos.filter(c => c.id.startsWith('EM-')).map(c => ({ id: c.id, optionLabel: label(c) })) },
     ].filter(g => g.items.length);
 
