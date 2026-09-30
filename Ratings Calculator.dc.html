@@ -29,6 +29,25 @@
       <p class="text-muted" style="margin:0;font-size:14px;">Interpolated capacity from manufacturer expanded rating data — VillaTherm &amp; Emeric equipment.</p>
     </header>
 
+    <sc-if value="{{ showBatch }}" hint-placeholder-val="{{ false }}">
+      <div class="card elev-md no-print" style="margin-bottom:var(--space-6);gap:10px;">
+        <div class="card-kicker">Batch export — {{ ahriRef }}</div>
+        <div style="font-size:13px;display:flex;flex-direction:column;gap:4px;">
+          <div>Cooling: Indoor DB 77°F · Indoor WB 63°F · Heating: Indoor DB 68°F</div>
+          <div>Outdoor pairs (cooling / heating): 95/17 · 100/26 · 102/30 · 104/47</div>
+        </div>
+        <div class="field">
+          <label>Airflow — CFM</label>
+          <input class="input" type="number" value="{{ batchCfm }}" onChange="{{ onBatchCfm }}">
+        </div>
+        <button class="btn btn-primary" style="align-self:flex-start;" onClick="{{ onRunBatch }}">{{ batchButtonLabel }}</button>
+        <sc-for list="{{ batchLog }}" as="line" hint-placeholder-count="0">
+          <div style="font-size:12px;">{{ line }}</div>
+        </sc-for>
+        <div class="text-muted" style="font-size:12px;">Alt+Shift+B hides this panel.</div>
+      </div>
+    </sc-if>
+
     <sc-if value="{{ notReady }}" hint-placeholder-val="{{ false }}">
       <p class="text-muted">Loading rating data…</p>
     </sc-if>
@@ -196,11 +215,99 @@ class Component extends DCLogic {
     errors: null,
     loadError: null,
     showPrintTip: false,
+    showBatch: false, batchCfm: '', batchRunning: false, batchLog: [],
   };
 
   componentDidMount() {
     this.loadData();
+    window.addEventListener('keydown', this.onKey);
   }
+
+  componentWillUnmount() { window.removeEventListener('keydown', this.onKey); }
+
+  onKey = (e) => {
+    if (e.altKey && e.shiftKey && e.code === 'KeyB') { e.preventDefault(); this.setState(s => ({ showBatch: !s.showBatch })); }
+  };
+
+  defaultBatchCfm(combo) {
+    if (!combo || !this.interp) return '';
+    let lo = -Infinity, hi = Infinity;
+    if (combo.cooling) { const r = this.interp.coolingRanges(combo.cooling).cfm; lo = Math.max(lo, r[0]); hi = Math.min(hi, r[1]); }
+    if (combo.heating) { const r = this.interp.heatingRanges(combo.heating).cfm; lo = Math.max(lo, r[0]); hi = Math.min(hi, r[1]); }
+    return Math.max(lo, Math.min(hi, (combo.tonnage / 12) * 400));
+  }
+
+  batchCfmValue(combo) { return this.state.batchCfm !== '' ? this.state.batchCfm : this.defaultBatchCfm(combo); }
+
+  loadJsPDF() {
+    if (window.jspdf) return Promise.resolve(window.jspdf.jsPDF);
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload = () => res(window.jspdf.jsPDF);
+      s.onerror = () => rej(new Error('Could not load the PDF library (check internet connection).'));
+      document.head.appendChild(s);
+    });
+  }
+
+  writePdf(jsPDF, combo, inp, cooling, heating, errs) {
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    const L = 54, R = 558, W = R - L;
+    let y = 72;
+    const parts = combo.modelName.split(' + ');
+    doc.setTextColor(32, 30, 29);
+    doc.setFont('times', 'bold'); doc.setFontSize(16);
+    const title = doc.splitTextToSize(combo.brand + ' ' + (combo.tonnage / 12) + ' Ton - ' + (parts[0] || '') + ' + ' + (parts[1] || ''), W);
+    doc.text(title, L, y); y += title.length * 19 + 2;
+    doc.setFont('times', 'normal'); doc.setFontSize(10); doc.setTextColor(102, 102, 102);
+    doc.text('AHRI Ref. # ' + (combo.ahri || '-') + ' \u00b7 Interpolated from manufacturer expanded rating data.', L, y); y += 24;
+    doc.setTextColor(68, 68, 68); doc.setFontSize(10.5);
+    const lines = ['Airflow: ' + inp.cfm + ' CFM'];
+    if (cooling) lines.push('Outdoor DB (cooling): ' + inp.odbC + '\u00b0F \u00b7 Indoor DB (cooling): ' + inp.idbC + '\u00b0F \u00b7 Indoor WB (cooling): ' + inp.iwbC + '\u00b0F');
+    if (heating) lines.push('Outdoor DB (heating): ' + inp.odbH + '\u00b0F \u00b7 Indoor DB (heating): ' + inp.idH + '\u00b0F');
+    lines.forEach(l => { doc.text(l, L, y); y += 15; });
+    y += 12;
+    const section = (h, rows) => {
+      doc.setTextColor(32, 30, 29); doc.setFont('times', 'bold'); doc.setFontSize(12.5);
+      doc.text(h, L, y); y += 20; doc.setFontSize(11);
+      rows.forEach(([k, v]) => {
+        doc.setFont('times', 'normal'); doc.text(k, L, y);
+        doc.setFont('times', 'bold'); doc.text(v, R, y, { align: 'right' });
+        y += 7; doc.setDrawColor(221, 221, 221); doc.setLineWidth(0.5); doc.line(L, y, R, y); y += 15;
+      });
+      y += 12;
+    };
+    if (cooling) section('Cooling performance', [['Total Capacity', this.fmtCap(cooling.totalBtuh)], ['Sensible Capacity', this.fmtCap(cooling.sensibleBtuh)], ['Latent Capacity', this.fmtCap(cooling.latentBtuh)]]);
+    if (heating) section('Heating performance', [['Total Capacity', this.fmtCap(heating.totalBtuh)]]);
+    if (errs.length) { doc.setFont('times', 'italic'); doc.setFontSize(10); doc.setTextColor(102, 102, 102); doc.text(doc.splitTextToSize('Not calculated: ' + errs.join(' '), W), L, y); }
+    return doc;
+  }
+
+  runBatch = async () => {
+    const combo = this.getCombo();
+    if (!combo || this.state.batchRunning) return;
+    const cfm = parseFloat(this.batchCfmValue(combo));
+    if (isNaN(cfm)) { this.setState({ batchLog: ['Enter an airflow first.'] }); return; }
+    this.setState({ batchRunning: true, batchLog: [] });
+    let jsPDF;
+    try { jsPDF = await this.loadJsPDF(); } catch (e) { this.setState({ batchRunning: false, batchLog: [e.message] }); return; }
+    const clamp = this.props.strictRangeValidation === false;
+    const pairs = [[95, 17], [100, 26], [102, 30], [104, 47]];
+    const log = [];
+    for (const [oc, oh] of pairs) {
+      const inp = { cfm, odbC: oc, idbC: 77, iwbC: 63, odbH: oh, idH: 68 };
+      const errs = [];
+      let cooling = null, heating = null;
+      if (combo.cooling) { try { cooling = this.interp.interpolateCooling(combo.cooling, { cfm, odb: oc, iwb: 63, idb: 77 }, clamp); } catch (e) { errs.push(e.message || String(e)); } }
+      if (combo.heating) { try { heating = this.interp.interpolateHeating(combo.heating, { cfm, id: 68, odb: oh }, clamp); } catch (e) { errs.push(e.message || String(e)); } }
+      const name = 'EXP AHRI ' + (combo.ahri || combo.id) + '_' + oc + '\u00b0F_' + oh + '\u00b0F.pdf';
+      if (!cooling && !heating) log.push('Skipped ' + name + ': ' + errs.join(' '));
+      else { this.writePdf(jsPDF, combo, inp, cooling, heating, errs).save(name); log.push('Saved ' + name + (errs.length ? ' (partial: ' + errs.join(' ') + ')' : '')); }
+      this.setState({ batchLog: log.slice() });
+      await new Promise(r => setTimeout(r, 700));
+    }
+    this.setState({ batchRunning: false });
+  };
 
   loadData(attempt) {
     if (window.RATINGS && window.RatingsInterp) {
@@ -220,7 +327,7 @@ class Component extends DCLogic {
 
   getCombo() { return this.RATINGS ? this.RATINGS.find(c => c.id === this.state.comboId) : null; }
 
-  selectCombo = (e) => { this.setState({ comboId: e.target.value, results: null, errors: null }); };
+  selectCombo = (e) => { this.setState({ comboId: e.target.value, results: null, errors: null, batchCfm: '', batchLog: [] }); };
   goToCalc = () => { this.setState({ view: 'calc', results: null, errors: null }); };
   goBack = () => { this.setState({ view: 'select', results: null, errors: null }); };
   setField = (field) => (e) => { this.setState({ [field]: e.target.value }); };
@@ -397,6 +504,12 @@ class Component extends DCLogic {
       errorTitle: results ? 'Partial result' : "Can't calculate",
       hasResults: !!results,
       showPrintTip: this.state.showPrintTip,
+      showBatch: this.state.showBatch && this.state.ready,
+      batchCfm: this.batchCfmValue(combo),
+      onBatchCfm: this.setField('batchCfm'),
+      onRunBatch: this.runBatch,
+      batchButtonLabel: this.state.batchRunning ? 'Exporting…' : 'Run batch & download 4 PDFs',
+      batchLog: this.state.batchLog,
       resultsCoolingPresent: !!(results && results.cooling),
       resultsHeatingPresent: !!(results && results.heating),
       usedCfm: results ? results.inputs.cfm : '',
