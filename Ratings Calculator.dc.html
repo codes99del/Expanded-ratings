@@ -205,8 +205,10 @@
 
 <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ false }}">
 <div class="print-sheet" style="display:none;flex-direction:column;gap:32px;font-family:var(--font-body);color:#201e1d;background:#fff;">
-  <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #201e1d;padding-bottom:14px;">
-    <div style="display:flex;flex-direction:column;gap:4px;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;border-bottom:3px solid #201e1d;padding-bottom:14px;">
+    <sc-if value="{{ isEmeric }}" hint-placeholder-val="{{ false }}"><img src="assets/logo-emeric.png" alt="Emeric logo" style="height:0.75in;width:auto;flex:none;"></sc-if>
+    <sc-if value="{{ isVillatherm }}" hint-placeholder-val="{{ false }}"><img src="assets/logo-villatherm.png" alt="VillaTherm logo" style="height:0.75in;width:auto;flex:none;"></sc-if>
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;">
       <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;">Expanded Performance Rating</div>
       <div style="font-family:var(--font-heading);font-size:26px;font-weight:700;">{{ printTitle }}</div>
     </div>
@@ -310,16 +312,31 @@ class Component extends DCLogic {
     };
   }
 
-  writePdf(jsPDF, combo, inp, cooling, heating, errs) {
+  logoFor(combo) {
+    return /emeric/i.test(combo.brand || '') ? { src: 'assets/logo-emeric.png', ratio: 0.672 } : { src: 'assets/logo-villatherm.png', ratio: 2.82 };
+  }
+
+  loadLogo(combo) {
+    const { src, ratio } = this.logoFor(combo);
+    this._logos = this._logos || {};
+    if (this._logos[src]) return Promise.resolve(this._logos[src]);
+    return fetch(src).then(r => r.blob()).then(b => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); }))
+      .then(data => (this._logos[src] = { data, ratio })).catch(() => null);
+  }
+
+  writePdf(jsPDF, combo, inp, cooling, heating, errs, logo) {
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
     const L = 54, R = 558, W = R - L, meta = this.printMeta(combo);
     const parts = combo.modelName.split(' + ');
     const ink = () => doc.setTextColor(32, 30, 29);
-    let y = 66;
+    const LH = 54;
+    let y = 54, TX = L;
+    if (logo) { const lw = LH * logo.ratio; doc.addImage(logo.data, 'PNG', L, y, lw, LH); TX = L + lw + 16; }
+    y += LH - 26;
     ink(); doc.setFont('times', 'normal'); doc.setFontSize(8.5);
-    doc.text('EXPANDED PERFORMANCE RATING', L, y, { charSpace: 1 });
+    doc.text('EXPANDED PERFORMANCE RATING', TX, y, { charSpace: 1 });
     doc.text('AHRI Ref. #', R, y, { align: 'right' });
-    y += 22; doc.setFont('times', 'bold'); doc.setFontSize(20); doc.text(meta.title, L, y);
+    y += 22; doc.setFont('times', 'bold'); doc.setFontSize(20); doc.text(meta.title, TX, y);
     doc.setFontSize(14); doc.text(String(combo.ahri || '-'), R, y, { align: 'right' });
     y += 12; doc.setDrawColor(32, 30, 29); doc.setLineWidth(2.25); doc.line(L, y, R, y);
     y += 30; doc.setFontSize(10);
@@ -363,6 +380,7 @@ class Component extends DCLogic {
     this.setState({ batchRunning: true, batchLog: [] });
     let jsPDF;
     try { jsPDF = await this.loadJsPDF(); } catch (e) { this.setState({ batchRunning: false, batchLog: [e.message] }); return; }
+    const logo = await this.loadLogo(combo);
     const clamp = this.props.strictRangeValidation === false;
     const pairs = [[95, 17], [100, 26], [102, 30], [104, 47]];
     const log = [];
@@ -374,7 +392,7 @@ class Component extends DCLogic {
       if (combo.heating) { try { heating = this.interp.interpolateHeating(combo.heating, { cfm, id: 68, odb: oh }, clamp); } catch (e) { errs.push(e.message || String(e)); } }
       const name = 'EXP AHRI ' + (combo.ahri || combo.id) + '_' + oc + '\u00b0F_' + oh + '\u00b0F.pdf';
       if (!cooling && !heating) log.push('Skipped ' + name + ': ' + errs.join(' '));
-      else { this.writePdf(jsPDF, combo, inp, cooling, heating, errs).save(name); log.push('Saved ' + name + (errs.length ? ' (partial: ' + errs.join(' ') + ')' : '')); }
+      else { this.writePdf(jsPDF, combo, inp, cooling, heating, errs, logo).save(name); log.push('Saved ' + name + (errs.length ? ' (partial: ' + errs.join(' ') + ')' : '')); }
       this.setState({ batchLog: log.slice() });
       await new Promise(r => setTimeout(r, 700));
     }
@@ -565,6 +583,8 @@ class Component extends DCLogic {
       totalHeatingFmt: results && results.heating ? this.fmtCap(results.heating.totalBtuh) : '',
       usedCfmFmt: results ? Number(results.inputs.cfm).toLocaleString() : '',
       printTitle: combo ? this.printMeta(combo).title : '',
+      isEmeric: !!combo && /emeric/i.test(combo.brand || ''),
+      isVillatherm: !!combo && !/emeric/i.test(combo.brand || ''),
       printConfig: combo ? this.printMeta(combo).config : '',
       printDate: this.printMeta(combo || {}).date,
     };
