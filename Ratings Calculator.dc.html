@@ -18,11 +18,14 @@
       .no-print { display: none !important; }
       html, body, body * { background: transparent !important; box-shadow: none !important; }
       .card { border: 1px solid #ccc !important; }
+      .screen-only { display: none !important; }
+      .print-sheet { display: flex !important; }
+      @page { margin: 0.6in; }
     }
   </style>
 </helmet>
 
-<div style="min-height:100vh;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);">
+<div class="screen-only" style="min-height:100vh;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);">
   <div style="max-width:640px;margin:0 auto;padding:var(--space-8) var(--space-4) var(--space-8);">
     <header style="margin-bottom:var(--space-6);">
       <h1 style="margin:0 0 var(--space-1);">VillaTherm &amp; Emeric Expanded Ratings Calculator</h1>
@@ -199,6 +202,53 @@
   </div>
 </div>
 
+
+<sc-if value="{{ hasResults }}" hint-placeholder-val="{{ false }}">
+<div class="print-sheet" style="display:none;flex-direction:column;gap:32px;font-family:var(--font-body);color:#201e1d;background:#fff;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #201e1d;padding-bottom:14px;">
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;">Expanded Performance Rating</div>
+      <div style="font-family:var(--font-heading);font-size:26px;font-weight:700;">{{ printTitle }}</div>
+    </div>
+    <div style="text-align:right;font-size:12px;line-height:1.5;">AHRI Ref. #<br><strong style="font-size:18px;">{{ ahriRef }}</strong></div>
+  </div>
+  <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 16px;font-size:13px;">
+    <span>Outdoor unit</span><strong>{{ outdoorModel }}</strong>
+    <span>Indoor unit</span><strong>{{ indoorModel }}</strong>
+    <span>Configuration</span><strong>{{ printConfig }}</strong>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;">
+    <sc-if value="{{ resultsCoolingPresent }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-family:var(--font-heading);font-size:17px;font-weight:700;">Cooling</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr><td style="padding:6px 0;border-bottom:1px solid #ddd;">Outdoor dry bulb (DB)</td><td style="text-align:right;border-bottom:1px solid #ddd;">{{ usedOdbC }}°F</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #ddd;">Indoor dry bulb (DB)</td><td style="text-align:right;border-bottom:1px solid #ddd;">{{ usedIdbC }}°F</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #ddd;">Indoor wet bulb (WB)</td><td style="text-align:right;border-bottom:1px solid #ddd;">{{ usedIwbC }}°F</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #ddd;">Airflow</td><td style="text-align:right;border-bottom:1px solid #ddd;">{{ usedCfmFmt }} CFM</td></tr>
+          <tr><td style="padding:10px 0 6px;border-bottom:1px solid #ddd;">Total capacity</td><td style="text-align:right;font-weight:700;border-bottom:1px solid #ddd;">{{ totalCoolingFmt }}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #ddd;">Sensible capacity</td><td style="text-align:right;font-weight:700;border-bottom:1px solid #ddd;">{{ sensibleFmt }}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #ddd;">Latent capacity</td><td style="text-align:right;font-weight:700;border-bottom:1px solid #ddd;">{{ latentFmt }}</td></tr>
+        </table>
+      </div>
+    </sc-if>
+    <sc-if value="{{ resultsHeatingPresent }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-family:var(--font-heading);font-size:17px;font-weight:700;">Heating</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr><td style="padding:6px 0;border-bottom:1px solid #ddd;">Outdoor dry bulb (DB)</td><td style="text-align:right;border-bottom:1px solid #ddd;">{{ usedOdbH }}°F</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #ddd;">Indoor dry bulb (DB)</td><td style="text-align:right;border-bottom:1px solid #ddd;">{{ usedIdH }}°F</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #ddd;">Airflow</td><td style="text-align:right;border-bottom:1px solid #ddd;">{{ usedCfmFmt }} CFM</td></tr>
+          <tr><td style="padding:10px 0 6px;border-bottom:1px solid #ddd;">Total capacity</td><td style="text-align:right;font-weight:700;border-bottom:1px solid #ddd;">{{ totalHeatingFmt }}</td></tr>
+        </table>
+      </div>
+    </sc-if>
+  </div>
+  <div style="display:flex;justify-content:space-between;gap:16px;font-size:11px;border-top:1px solid #201e1d;padding-top:10px;margin-top:24px;">
+    <span>Values linearly interpolated from manufacturer expanded rating data.</span><span>Generated {{ printDate }}</span>
+  </div>
+</div>
+</sc-if>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{
   &quot;strictRangeValidation&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Behavior&quot; },
@@ -250,36 +300,58 @@ class Component extends DCLogic {
     });
   }
 
+  printMeta(combo) {
+    const disc = { side: 'Side discharge', top: 'Top discharge', side2: 'Side discharge, two-piece air handler' }[combo.discharge];
+    const ref = combo.id && combo.id.startsWith('S2-') ? 'R32' : (combo.id && /^(SD|TD)-/.test(combo.id) ? 'R454B' : '');
+    return {
+      title: (combo.brand || '') + ' ' + (combo.tonnage / 12) + ' Ton Heat Pump',
+      config: [ref, disc].filter(Boolean).join(' \u00b7 ') || combo.label || '',
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+  }
+
   writePdf(jsPDF, combo, inp, cooling, heating, errs) {
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
-    const L = 54, R = 558, W = R - L;
-    let y = 72;
+    const L = 54, R = 558, W = R - L, meta = this.printMeta(combo);
     const parts = combo.modelName.split(' + ');
-    doc.setTextColor(32, 30, 29);
-    doc.setFont('times', 'bold'); doc.setFontSize(16);
-    const title = doc.splitTextToSize(combo.brand + ' ' + (combo.tonnage / 12) + ' Ton - ' + (parts[0] || '') + ' + ' + (parts[1] || ''), W);
-    doc.text(title, L, y); y += title.length * 19 + 2;
-    doc.setFont('times', 'normal'); doc.setFontSize(10); doc.setTextColor(102, 102, 102);
-    doc.text('AHRI Ref. # ' + (combo.ahri || '-') + ' \u00b7 Interpolated from manufacturer expanded rating data.', L, y); y += 24;
-    doc.setTextColor(68, 68, 68); doc.setFontSize(10.5);
-    const lines = ['Airflow: ' + inp.cfm + ' CFM'];
-    if (cooling) lines.push('Outdoor DB (cooling): ' + inp.odbC + '\u00b0F \u00b7 Indoor DB (cooling): ' + inp.idbC + '\u00b0F \u00b7 Indoor WB (cooling): ' + inp.iwbC + '\u00b0F');
-    if (heating) lines.push('Outdoor DB (heating): ' + inp.odbH + '\u00b0F \u00b7 Indoor DB (heating): ' + inp.idH + '\u00b0F');
-    lines.forEach(l => { doc.text(l, L, y); y += 15; });
-    y += 12;
-    const section = (h, rows) => {
-      doc.setTextColor(32, 30, 29); doc.setFont('times', 'bold'); doc.setFontSize(12.5);
-      doc.text(h, L, y); y += 20; doc.setFontSize(11);
-      rows.forEach(([k, v]) => {
-        doc.setFont('times', 'normal'); doc.text(k, L, y);
-        doc.setFont('times', 'bold'); doc.text(v, R, y, { align: 'right' });
-        y += 7; doc.setDrawColor(221, 221, 221); doc.setLineWidth(0.5); doc.line(L, y, R, y); y += 15;
+    const ink = () => doc.setTextColor(32, 30, 29);
+    let y = 66;
+    ink(); doc.setFont('times', 'normal'); doc.setFontSize(8.5);
+    doc.text('EXPANDED PERFORMANCE RATING', L, y, { charSpace: 1 });
+    doc.text('AHRI Ref. #', R, y, { align: 'right' });
+    y += 22; doc.setFont('times', 'bold'); doc.setFontSize(20); doc.text(meta.title, L, y);
+    doc.setFontSize(14); doc.text(String(combo.ahri || '-'), R, y, { align: 'right' });
+    y += 12; doc.setDrawColor(32, 30, 29); doc.setLineWidth(2.25); doc.line(L, y, R, y);
+    y += 30; doc.setFontSize(10);
+    [['Outdoor unit', parts[0] || ''], ['Indoor unit', parts[1] || ''], ['Configuration', meta.config]].forEach(([k, v]) => {
+      doc.setFont('times', 'normal'); doc.text(k, L, y); doc.setFont('times', 'bold'); doc.text(v, L + 92, y); y += 16;
+    });
+    y += 22;
+    const cfm = Number(inp.cfm).toLocaleString() + ' CFM';
+    const col = (x, w, head, rows) => {
+      let yy = y; ink(); doc.setFont('times', 'bold'); doc.setFontSize(13); doc.text(head, x, yy); yy += 22; doc.setFontSize(10);
+      rows.forEach(([k, v, bold, gap]) => {
+        if (gap) yy += 4;
+        doc.setFont('times', 'normal'); doc.text(k, x, yy);
+        doc.setFont('times', bold ? 'bold' : 'normal'); doc.text(v, x + w, yy, { align: 'right' });
+        yy += 6; doc.setDrawColor(221, 221, 221); doc.setLineWidth(0.5); doc.line(x, yy, x + w, yy); yy += 14;
       });
-      y += 12;
+      return yy;
     };
-    if (cooling) section('Cooling performance', [['Total Capacity', this.fmtCap(cooling.totalBtuh)], ['Sensible Capacity', this.fmtCap(cooling.sensibleBtuh)], ['Latent Capacity', this.fmtCap(cooling.latentBtuh)]]);
-    if (heating) section('Heating performance', [['Total Capacity', this.fmtCap(heating.totalBtuh)]]);
-    if (errs.length) { doc.setFont('times', 'italic'); doc.setFontSize(10); doc.setTextColor(102, 102, 102); doc.text(doc.splitTextToSize('Not calculated: ' + errs.join(' '), W), L, y); }
+    const cw = (W - 30) / 2;
+    let bottom = y, x = L;
+    if (cooling) { bottom = Math.max(bottom, col(x, cw, 'Cooling', [
+      ['Outdoor dry bulb (DB)', inp.odbC + '\u00b0F'], ['Indoor dry bulb (DB)', inp.idbC + '\u00b0F'], ['Indoor wet bulb (WB)', inp.iwbC + '\u00b0F'], ['Airflow', cfm],
+      ['Total capacity', this.fmtCap(cooling.totalBtuh), true, true], ['Sensible capacity', this.fmtCap(cooling.sensibleBtuh), true], ['Latent capacity', this.fmtCap(cooling.latentBtuh), true]])); x += cw + 30; }
+    if (heating) { bottom = Math.max(bottom, col(x, cw, 'Heating', [
+      ['Outdoor dry bulb (DB)', inp.odbH + '\u00b0F'], ['Indoor dry bulb (DB)', inp.idH + '\u00b0F'], ['Airflow', cfm],
+      ['Total capacity', this.fmtCap(heating.totalBtuh), true, true]])); }
+    y = bottom + 24;
+    doc.setFontSize(8.5);
+    if (errs.length) { doc.setFont('times', 'italic'); doc.setTextColor(102, 102, 102); const e = doc.splitTextToSize('Not calculated: ' + errs.join(' '), W); doc.text(e, L, y); y += e.length * 11 + 12; ink(); }
+    doc.setDrawColor(32, 30, 29); doc.setLineWidth(0.75); doc.line(L, y, R, y); y += 13;
+    doc.setFont('times', 'normal'); doc.text('Values linearly interpolated from manufacturer expanded rating data.', L, y);
+    doc.text('Generated ' + meta.date, R, y, { align: 'right' });
     return doc;
   }
 
@@ -386,43 +458,6 @@ class Component extends DCLogic {
     } } });
   };
 
-  buildPrintHtml() {
-    const results = this.state.results;
-    const combo = this.getCombo();
-    if (!results || !combo) return '';
-    const parts = combo.modelName.split(' + ');
-    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-    let rows = '';
-    if (results.cooling) {
-      rows += `<h2>Cooling performance</h2>
-        <table><tr><td>Total Capacity</td><td>${esc(this.fmtCap(results.cooling.totalBtuh))}</td></tr>
-        <tr><td>Sensible Capacity</td><td>${esc(this.fmtCap(results.cooling.sensibleBtuh))}</td></tr>
-        <tr><td>Latent Capacity</td><td>${esc(this.fmtCap(results.cooling.latentBtuh))}</td></tr></table>`;
-    }
-    if (results.heating) {
-      rows += `<h2>Heating performance</h2>
-        <table><tr><td>Total Capacity</td><td>${esc(this.fmtCap(results.heating.totalBtuh))}</td></tr></table>`;
-    }
-    let conditions = `<div>Airflow: <strong>${esc(results.inputs.cfm)} CFM</strong></div>`;
-    if (results.cooling) conditions += `<div>Outdoor DB (cooling): <strong>${esc(results.inputs.odbC)}°F</strong> · Indoor DB (cooling): <strong>${esc(results.inputs.idbC)}°F</strong> · Indoor WB (cooling): <strong>${esc(results.inputs.iwbC)}°F</strong></div>`;
-    if (results.heating) conditions += `<div>Outdoor DB (heating): <strong>${esc(results.inputs.odbH)}°F</strong> · Indoor DB (heating): <strong>${esc(results.inputs.idH)}°F</strong></div>`;
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expanded Rating Results</title>
-      <style>
-        body{font-family:Georgia,'Source Serif 4',serif;color:#201e1d;max-width:640px;margin:32px auto;padding:0 16px;}
-        h1{font-size:22px;margin:0 0 4px;} h2{font-size:16px;margin:24px 0 8px;}
-        p.sub{color:#666;margin:0 0 24px;font-size:13px;}
-        table{width:100%;border-collapse:collapse;margin-bottom:8px;}
-        td{padding:6px 0;border-bottom:1px solid #ddd;font-size:14px;}
-        td:last-child{text-align:right;font-weight:600;}
-        .conditions{font-size:13px;color:#444;display:flex;flex-direction:column;gap:4px;margin-bottom:16px;}
-      </style></head><body>
-      <h1>${esc(combo.brand)} ${esc(combo.tonnage / 12)} Ton — ${esc(parts[0] || '')} + ${esc(parts[1] || '')}</h1>
-      <p class="sub">AHRI Ref. # ${esc(combo.ahri || '—')} · Interpolated from manufacturer expanded rating data.</p>
-      <div class="conditions">${conditions}</div>
-      ${rows}
-      </body></html>`;
-  }
-
   printResults = () => {
     // Published pages are served inside a sandboxed iframe with no allow-modals/allow-popups,
     // which silently blocks window.print()/window.open() from script — a platform restriction
@@ -528,6 +563,10 @@ class Component extends DCLogic {
       sensibleFmt: results && results.cooling ? this.fmtCap(results.cooling.sensibleBtuh) : '',
       latentFmt: results && results.cooling ? this.fmtCap(results.cooling.latentBtuh) : '',
       totalHeatingFmt: results && results.heating ? this.fmtCap(results.heating.totalBtuh) : '',
+      usedCfmFmt: results ? Number(results.inputs.cfm).toLocaleString() : '',
+      printTitle: combo ? this.printMeta(combo).title : '',
+      printConfig: combo ? this.printMeta(combo).config : '',
+      printDate: this.printMeta(combo || {}).date,
     };
   }
 }
