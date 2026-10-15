@@ -34,14 +34,15 @@
 
     <sc-if value="{{ showBatch }}" hint-placeholder-val="{{ false }}">
       <div class="card elev-md no-print" style="margin-bottom:var(--space-6);gap:10px;">
-        <div class="card-kicker">Batch export — {{ ahriRef }}</div>
+        <div class="card-kicker">Batch export — {{ batchFamilyLabel }}</div>
         <div style="font-size:13px;display:flex;flex-direction:column;gap:4px;">
           <div>Cooling: Indoor DB 77°F · Indoor WB 63°F · Heating: Indoor DB 68°F</div>
           <div>Outdoor pairs (cooling / heating): 95/17 · 100/26 · 102/30 · 104/47</div>
         </div>
-        <div class="field">
-          <label>Airflow — CFM</label>
-          <input class="input" type="number" value="{{ batchCfm }}" onChange="{{ onBatchCfm }}">
+        <div style="display:flex;flex-direction:column;gap:4px;font-size:13px;">
+          <sc-for list="{{ batchFamily }}" as="m" hint-placeholder-count="4">
+            <div>{{ m.label }} — AHRI {{ m.ahri }} — {{ m.cfm }} CFM</div>
+          </sc-for>
         </div>
         <button class="btn btn-primary" style="align-self:flex-start;" onClick="{{ onRunBatch }}">{{ batchButtonLabel }}</button>
         <sc-for list="{{ batchLog }}" as="line" hint-placeholder-count="0">
@@ -372,18 +373,30 @@ class Component extends DCLogic {
     return doc;
   }
 
+  familyOf(combo) {
+    if (!combo || !this.RATINGS) return [];
+    const pre = combo.id.split('-')[0];
+    return this.RATINGS.filter(c => c.id.split('-')[0] === pre).sort((a, b) => a.tonnage - b.tonnage);
+  }
+
   runBatch = async () => {
-    const combo = this.getCombo();
-    if (!combo || this.state.batchRunning) return;
-    const cfm = parseFloat(this.batchCfmValue(combo));
-    if (isNaN(cfm)) { this.setState({ batchLog: ['Enter an airflow first.'] }); return; }
+    const sel = this.getCombo();
+    if (!sel || this.state.batchRunning) return;
     this.setState({ batchRunning: true, batchLog: [] });
+    const log = [];
+    for (const combo of this.familyOf(sel)) {
+      const cfm = parseFloat(this.defaultBatchCfm(combo));
+      await this.runBatchFor(combo, cfm, log);
+    }
+    this.setState({ batchRunning: false });
+  };
+
+  runBatchFor = async (combo, cfm, log) => {
     let jsPDF;
-    try { jsPDF = await this.loadJsPDF(); } catch (e) { this.setState({ batchRunning: false, batchLog: [e.message] }); return; }
+    try { jsPDF = await this.loadJsPDF(); } catch (e) { log.push(e.message); this.setState({ batchLog: log.slice() }); return; }
     const logo = await this.loadLogo(combo);
     const clamp = this.props.strictRangeValidation === false;
     const pairs = [[95, 17], [100, 26], [102, 30], [104, 47]];
-    const log = [];
     for (const [oc, oh] of pairs) {
       const inp = { cfm, odbC: oc, idbC: 77, iwbC: 63, odbH: oh, idH: 68 };
       const errs = [];
@@ -396,7 +409,6 @@ class Component extends DCLogic {
       this.setState({ batchLog: log.slice() });
       await new Promise(r => setTimeout(r, 700));
     }
-    this.setState({ batchRunning: false });
   };
 
   loadData(attempt) {
@@ -558,10 +570,10 @@ class Component extends DCLogic {
       hasResults: !!results,
       showPrintTip: this.state.showPrintTip,
       showBatch: this.state.showBatch && this.state.ready,
-      batchCfm: this.batchCfmValue(combo),
-      onBatchCfm: this.setField('batchCfm'),
+      batchFamily: this.familyOf(combo).map(c => ({ label: c.label, ahri: c.ahri || '—', cfm: Number(this.defaultBatchCfm(c)).toLocaleString() })),
+      batchFamilyLabel: combo ? combo.label.replace(/^\d+K\s*/, '') + ' — all tonnages' : '',
       onRunBatch: this.runBatch,
-      batchButtonLabel: this.state.batchRunning ? 'Exporting…' : 'Run batch & download 4 PDFs',
+      batchButtonLabel: this.state.batchRunning ? 'Exporting…' : 'Run batch & download ' + this.familyOf(combo).length * 4 + ' PDFs',
       batchLog: this.state.batchLog,
       resultsCoolingPresent: !!(results && results.cooling),
       resultsHeatingPresent: !!(results && results.heating),
