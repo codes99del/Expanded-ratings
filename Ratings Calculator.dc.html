@@ -207,7 +207,7 @@
 <div class="print-sheet" style="display:none;flex-direction:column;gap:32px;font-family:var(--font-body);color:#201e1d;background:#fff;">
   <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;border-bottom:3px solid #201e1d;padding-bottom:14px;">
     <sc-if value="{{ isEmeric }}" hint-placeholder-val="{{ false }}"><img src="assets/logo-emeric.png" alt="Emeric logo" style="height:0.75in;width:auto;flex:none;"></sc-if>
-    <sc-if value="{{ isVillatherm }}" hint-placeholder-val="{{ false }}"><img src="assets/logo-villatherm.png" alt="VillaTherm logo" style="height:0.75in;width:auto;flex:none;"></sc-if>
+    <sc-if value="{{ isVillatherm }}" hint-placeholder-val="{{ false }}"><img src="assets/logo-villatherm.png" alt="VillaTherm logo" style="height:0.5in;width:auto;flex:none;"></sc-if>
     <div style="display:flex;flex-direction:column;gap:4px;flex:1;">
       <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;">Expanded Performance Rating</div>
       <div style="font-family:var(--font-heading);font-size:26px;font-weight:700;">{{ printTitle }}</div>
@@ -329,7 +329,7 @@ class Component extends DCLogic {
     const L = 54, R = 558, W = R - L, meta = this.printMeta(combo);
     const parts = combo.modelName.split(' + ');
     const ink = () => doc.setTextColor(32, 30, 29);
-    const LH = 54;
+    const LH = logo && logo.ratio > 1 ? 36 : 54;
     let y = 54, TX = L;
     if (logo) { const lw = LH * logo.ratio; doc.addImage(logo.data, 'PNG', L, y, lw, LH); TX = L + lw + 16; }
     y += LH - 26;
